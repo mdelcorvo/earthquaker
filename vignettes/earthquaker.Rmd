@@ -1,0 +1,90 @@
+---
+title: "R package earthquaker"
+author: "Marcello Del Corvo"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This project provides functions for the cleaning and visualization of the
+NOOA Dataset. In particular, it provides:
+
+- Functions for cleaning data, parsing strings, converting fields in the appropriate format
+- Functions for visualizing data over time
+- Functions for visualizing data over space
+
+## NOOA Dataset info
+
+This capstone project will be centered around a dataset obtained from the U.S. National Oceanographic and Atmospheric Administration (NOAA) on significant earthquakes around the world. This dataset contains information about 5,933 earthquakes over an approximately 4,000 year time span.
+
+## Parsing data
+
+`eq_clean_data` converts time information to Date class,
+it converts the longitude and latitude information to numeric
+and it applies the `eq_location_clean` function to LOCATION_NAME field.
+
+```{r, eval=FALSE}
+earthquakes <- capstone::eq_clean_data( readr::read_delim("signif.txt",delim="\t") )
+```
+
+```{r, include=FALSE}
+earthquakes <- capstone::eq_clean_data( readr::read_delim("signif.txt",delim="\t") )
+```
+
+## Visualization over time
+
+`geom_timeline` visualizes the times at which earthquakes occur within
+certain countries. In addition, it displays the magnitudes (i.e. Richter
+scale value) and the number of deaths associated with each earthquake.
+`geom_timeline_label` adds labels of the earthquakes on a Timeline representation.
+
+```{r, fig.show='hold'}
+x <- as.Date("2000-01-01")
+xmax <- as.Date("2017-01-01")
+countries <- c("ITALY","USA")
+n_max <- 10
+
+to_plot <- earthquakes
+to_plot <- dplyr::filter(to_plot, date >= x & date <=xmax & (COUNTRY %in% countries))
+to_plot <- dplyr::filter(to_plot, !is.na(INTENSITY) & !is.na(DEATHS))
+to_plot <- dplyr::mutate(to_plot, COUNTRY = factor(COUNTRY, levels = unique(COUNTRY)))
+
+to_plot2 <- to_plot[order(to_plot$INTENSITY,decreasing = TRUE),]
+to_plot2 <- to_plot2[1:min(n_max,nrow(to_plot2)),]
+
+ggplot2::ggplot(data = to_plot) +
+  ggplot2::geom_segment(ggplot2::aes(x = x, xend = xmax, y = COUNTRY, yend = COUNTRY),
+               alpha = 0.5, color = "gray") +
+  capstone::geom_timeline(ggplot2::aes(x = date, y = COUNTRY, i = INTENSITY, d = DEATHS)) +
+  ggplot2::geom_segment(data = to_plot2, ggplot2::aes(x = date, xend = date, y = COUNTRY, yend = as.numeric(COUNTRY) + 0.25),
+               alpha = 0.5, color = "gray") +
+  capstone::geom_timeline_label(data = to_plot2, ggplot2::aes(x = date, y = as.numeric(COUNTRY) + 0.4, label = LOCATION_NAME)) +
+  ggplot2::theme_minimal()
+```
+
+## Visualization over space
+
+`eq_map` maps the epicenters (LATITUDE/LONGITUDE) and annotates
+each point in a pop up window containing annotation data stored in a
+column of the data frame.
+`eq_create_label`creates an HTML label for the leaflet map
+containing the location cleaned by the `eq_location_clean` function,
+the magnitude (EQ_PRIMARY), and the total number of deaths (TOTAL_DEATHS).
+
+```{r, eval=FALSE}
+out <- readr::read_delim("signif.txt", delim = "\t")
+```
+
+```{r, include=FALSE}
+out <- readr::read_delim("signif.txt", delim = "\t")
+```
+
+```{r, fig.show='hold'}
+out <- capstone::eq_clean_data(out)
+out <- dplyr::filter(out, COUNTRY == "MEXICO" & lubridate::year(date) >= 2000)
+out <- dplyr::mutate(out, popup_text = capstone::eq_create_label(out))
+capstone::eq_map(out, annot_col = "popup_text")
+```
